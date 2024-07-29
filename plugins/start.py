@@ -17,47 +17,75 @@ SECONDS = int(os.getenv("SECONDS", "600"))
 
 @Bot.on_message(filters.command('start') & filters.private & subscribed)
 async def start_command(client: Client, message: Message):
-    user_id = message.from_user.id
-
-    # Add user to database if not present
-    if not await present_user(user_id):
+    id = message.from_user.id
+    if not await present_user(id):
         try:
-            await add_user(user_id)
+            await add_user(id)
         except:
             pass
-
     text = message.text
-
     if len(text) > 7:
         try:
             base64_string = text.split(" ", 1)[1]
-            string = await decode(base64_string)
-            argument = string.split("-")
-
-            if len(argument) == 3:
-                try:
-                    start = int(int(argument[1]) / abs(client.db_channel.id))
-                    end = int(int(argument[2]) / abs(client.db_channel.id))
-                    ids = range(start, end + 1) if start <= end else []
-
-                except Exception as e:
-                    print(f"Error parsing argument: {e}")
-                    return
-
-            elif len(argument) == 2:
-                try:
-                    ids = [int(int(argument[1]) / abs(client.db_channel.id))]
-
-                except Exception as e:
-                    print(f"Error parsing argument: {e}")
-                    return
-
-            else:
-                return
-
-        except Exception as e:
-            print(f"Error decoding argument: {e}")
+        except:
             return
+        string = await decode(base64_string)
+        argument = string.split("-")
+        if len(argument) == 3:
+            try:
+                start = int(int(argument[1]) / abs(client.db_channel.id))
+                end = int(int(argument[2]) / abs(client.db_channel.id))
+            except:
+                return
+            if start <= end:
+                ids = range(start, end + 1)
+            else:
+                ids = []
+                i = start
+                while True:
+                    ids.append(i)
+                    i -= 1
+                    if i < end:
+                        break
+        elif len(argument) == 2:
+            try:
+                ids = [int(int(argument[1]) / abs(client.db_channel.id))]
+            except:
+                return
+        temp_msg = await message.reply("Please wait...")
+        try:
+            messages = await get_messages(client, ids)
+        except:
+            await message.reply_text("Something went wrong..!")
+            return
+        await temp_msg.delete()
+
+        for msg in messages:
+
+            if bool(CUSTOM_CAPTION) & bool(msg.document):
+                caption = CUSTOM_CAPTION.format(previouscaption="" if not msg.caption else msg.caption.html,
+                                                filename=msg.document.file_name)
+            else:
+                caption = "" if not msg.caption else msg.caption.html
+
+            if DISABLE_CHANNEL_BUTTON:
+                reply_markup = msg.reply_markup
+            else:
+                reply_markup = None
+
+             try:
+                f = await msg.copy(chat_id=message.from_user.id, caption = caption, parse_mode = ParseMode.HTML, reply_markup = reply_markup, protect_content=PROTECT_CONTENT)
+
+            except FloodWait as e:
+                await asyncio.sleep(e.x)
+                f = await msg.copy(chat_id=message.from_user.id, caption = caption, parse_mode = ParseMode.HTML, reply_markup = reply_markup, protect_content=PROTECT_CONTENT)
+
+            except:
+                pass
+        k = await client.send_message(chat_id = message.from_user.id, text=f"<b>❗️ <u>IMPORTANT</u> ❗️</b>\n\nThis video / file will be deleted in 10 minutes (Due to copyright issues).\n\n📌 Please forward this video / file to somewhere else and start downloading there.")
+        await asyncio.sleep(SECONDS)
+        await f.delete()
+        await k.edit_text("Your video / file is successfully deleted !")
 
     else:
         # No command with arguments, handle the 'else' block
@@ -84,118 +112,6 @@ async def start_command(client: Client, message: Message):
             quote=True
         )
         return
-
-    # Notify user that content is being prepared
-    temp_msg = await message.reply("!! ᴄᴏɴᴛᴇɴᴛ ᴠᴇᴛᴛɪɴɢ !!")
-
-    try:
-        messages = await get_messages(client, ids)
-
-    except Exception as e:
-        print(f"Error fetching messages: {e}")
-        await temp_msg.edit_text("ᴇʀʀᴏʀ ꜰᴇᴛᴄʜɪɴɢ ᴄᴏɴᴛᴇɴᴛ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
-        return
-
-    if not messages:
-        sent_msg = await message.reply_text("ɴɪɢɢᴀ ʏᴏᴜ ʟᴀᴛᴇ. ɢᴇᴛ ʏᴏᴜʀ ᴀss ɪɴ ʜᴇʀᴇ ɪɴ ᴛɪᴍᴇ")
-
-        # Auto delete the message after 7 seconds
-        await asyncio.sleep(7)
-        try:
-            await sent_msg.delete()
-        except Exception as e:
-            print(f"Error deleting message: {e}")
-
-        return
-
-    # Delete the temporary message before sharing files
-    await temp_msg.delete()
-
-    sent_messages = []
-    found_files = False
-
-    for msg in messages:
-        # Check if the message is empty (no document)
-        if msg.document is None:
-            # Skip empty files
-            continue
-
-        found_files = True
-
-        # Generate caption based on configuration
-        if bool(CUSTOM_CAPTION) and bool(msg.document):
-            caption = CUSTOM_CAPTION.format(
-                previouscaption="" if not msg.caption else msg.caption.html,
-                filename=msg.document.file_name
-            )
-        else:
-            caption = "" if not msg.caption else msg.caption.html
-
-        # Determine reply markup based on configuration
-        if DISABLE_CHANNEL_BUTTON:
-            reply_markup = msg.reply_markup
-        else:
-            reply_markup = None
-
-        try:
-            # Copy message to user with specified settings
-            copied_msg = await msg.copy(
-                chat_id=message.from_user.id,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup,
-                protect_content=PROTECT_CONTENT
-            )
-            sent_messages.append(copied_msg)
-
-        except FloodWait as e:
-            await asyncio.sleep(e.x)
-            copied_msg = await msg.copy(
-                chat_id=message.from_user.id,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup,
-                protect_content=PROTECT_CONTENT
-            )
-            sent_messages.append(copied_msg)
-
-        except:
-            pass
-
-    if found_files:
-        # Notify the user about the deletion process and wait before deletion
-        deletion_msg = await client.send_message(
-            chat_id=message.from_user.id,
-            text="<b><center>❗<u> Important </u> ❗</center></b>\n\nSorry Dude This File/Video Will Be Deleted in 10 min\n\n🍁So, Please Immediately Save This File In Your Saved Messages.🍂",
-            parse_mode=ParseMode.HTML
-        )
-
-        await asyncio.sleep(SECONDS)
-
-        # Delete each sent message and update the user
-        for msg in sent_messages:
-            try:
-                await msg.delete()
-
-            except Exception as e:
-                print(f"Error deleting message: {e}")
-                pass
-
-        # Inform user about completion of deletion process
-        await deletion_msg.edit_text("")
-
-    else:
-        # No files found, inform the user
-        sent_msg = await message.reply_text("ɴɪɢɢᴀ ʏᴏᴜ ʟᴀᴛᴇ. ɢᴇᴛ ʏᴏᴜʀ ᴀss ɪɴ ʜᴇʀᴇ ɪɴ ᴛɪᴍᴇ")
-
-        # Auto delete the message after 7 seconds
-        await asyncio.sleep(7)
-        try:
-            await sent_msg.delete()
-        except Exception as e:
-            print(f"Error deleting message: {e}")
-    return
-
 
 # =====================================================================================##
 
