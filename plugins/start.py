@@ -84,12 +84,14 @@ async def start_command(client: Client, message: Message):
                 snt_msgs.append(snt_msg)
             except:
                 pass
-        await message.reply_text("<b>❗️ <u>IMPORTANT</u> ❗️</b>\n\nThis video / file will be deleted in 5 minutes (Due to copyright issues).\n\n📌 Please forward this video / file to somewhere else and start downloading there.")
+                
+        f = await message.reply_text("<b>❗️ <u>IMPORTANT</u> ❗️</b>\n\nThis video / file will be deleted in 5 minutes (Due to copyright issues).\n\n📌 Please forward this video / file to somewhere else and start downloading there.")
         await asyncio.sleep(SECONDS)
 
         for snt_msg in snt_msgs:
             try:
                 await snt_msg.delete()
+                await f.edit_text(f"Bro {mention}\n\n Your File Is Deleted")
             except:
                 pass
         return
